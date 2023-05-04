@@ -21,15 +21,19 @@ import numpy as np
 from ultralytics import YOLO
 import matplotlib.pyplot as plt
 
-
+#Determine the input video
 SOURCE_VIDEO_PATH = "traffic-detection.mp4"
 
+#Define BYTE parameters
+#Detection score threshold
 BYTETRACKER_TRACK_TRESH = 0.25
-BYTETRACKER_TRACK_BUFFER = 30
+#Matching algorithm(i.e. IoU/Re-ID) threshold
 BYTETRACKER_MATCH_TRESH = 0.4
-BYTETRACKER_FRAME_RATE = 15
+#Track buffer and frame rate will be used to determine the time after a lost track will be marked removed
+BYTETRACKER_TRACK_BUFFER = 30
+BYTETRACKER_FRAME_RATE = 30
     
-# converts Detections into format that can be consumed by match_detections_with_tracks function
+#Converts Detections into format that can be consumed by ByteTracker.update()
 def detections2boxes(detections: Detections) -> np.ndarray:
     
     return np.hstack((
@@ -38,12 +42,12 @@ def detections2boxes(detections: Detections) -> np.ndarray:
         detections.class_id.reshape((-1, 1))
     ))
 
-# converts List[STrack] into format that can be consumed by match_detections_with_tracks function
+#Converts List[STrack] into format that can be consumed by match_detections_with_tracks function
 def tracks2boxes(tracks: List[STrack]) -> np.ndarray:
     return np.array(tracks[:, 0:4], dtype=float)
 
 
-# matches our bounding boxes with predictions
+#Matches our bounding boxes with predictions
 def match_detections_with_tracks(
     detections: Detections, 
     tracks: List[STrack]
@@ -63,81 +67,85 @@ def match_detections_with_tracks(
 
     return tracker_ids
 
+#Define the pre-trained model available ultralytics source repository
 MODEL = "yolov8s.pt"
 
+#Initialize detector instance
 model = YOLO(MODEL)
 model.fuse()
 
-# dict maping class_id to class_name
+#Assign method mapping class_id to strings to a macro
 CLASS_NAMES_DICT = model.model.names
-# class_ids of interest - car, motorcycle, bus and truck
+#Class_ids of interest - car, motorcycle, bus and truck
 CLASS_ID = [2, 3, 5, 7]
 
-
-# settings
+#Settings
 LINE_START = Point(50, 1500)
 LINE_END = Point(3840-50, 1500)
 
+#Output video path
 TARGET_VIDEO_PATH = "traffic-detection-result.mp4"
 
-# create BYTETracker instance
+#Create BYTETracker instance
 byte_tracker = BYTETracker(track_thresh=BYTETRACKER_TRACK_TRESH, 
                            track_buffer=BYTETRACKER_TRACK_BUFFER, 
                            match_thresh=BYTETRACKER_MATCH_TRESH, 
                            frame_rate=BYTETRACKER_FRAME_RATE)
 
-# create VideoInfo instance
+#Create VideoInfo instance
 video_info = VideoInfo.from_video_path(SOURCE_VIDEO_PATH)
-# create frame generator
+#Create frame generator
 generator = get_video_frames_generator(SOURCE_VIDEO_PATH)
-# create LineCounter instance
+#Create LineCounter instance
 line_counter = LineZone(start=LINE_START, end=LINE_END)
-# create instance of BoxAnnotator and LineCounterAnnotator
+#Create instance of BoxAnnotator and LineCounterAnnotator
 box_annotator = BoxAnnotator(thickness=4, text_thickness=4, text_scale=2)
 line_annotator = LineZoneAnnotator(thickness=4, text_thickness=4, text_scale=2)
 
-# acquire first video frame
+#Acquire first video frame
 iterator = iter(generator)
 
 with VideoSink(TARGET_VIDEO_PATH, video_info) as sink:
-    # loop over video frames
+    #Loop over video frames
     for frame_number in range (video_info.total_frames):
 
         frame = next(iterator)
-        # model prediction on single frame and conversion to supervision Detections
+        #Detection on single frame
         results = model(frame)
 
+        #Conversion to supervision detections
         detections = Detections.from_yolov8(results[0])
 
-        # filtering out detections with unwanted classes
+        #Filtering out detections with unwanted classes
         mask = np.array([class_id in CLASS_ID for class_id in detections.class_id], dtype=bool)
         detections.filter(mask=mask, inplace=True)
 
-        # tracking detections
+        #Update tracks with detections
         tracks = byte_tracker.update(
             dets=detections2boxes(detections=detections), _=frame.shape
         )
 
+        #Match the returned tracks with the input detection
         tracker_id = match_detections_with_tracks(detections=detections, tracks=tracks)
         detections.tracker_id = np.array(tracker_id)
 
-        # filtering out detections without trackers
+        #Filtering out detections without trackers
         mask = np.array([tracker_id is not None for tracker_id in detections.tracker_id], dtype=bool)
         detections.filter(mask=mask, inplace=True)
 
-        # format custom labels
+        #Format custom labels
         labels = [
             f"{tracker_id} {CLASS_NAMES_DICT[class_id]} {confidence:0.2f}"
             for _, confidence, class_id, tracker_id
             in detections
         ]
 
-        # updating line counter
+        # Updating line counter
         line_counter.trigger(detections=detections)
         #print(line_counter.in_count)
         #print(line_counter.out_count)
 
-        # annotate and display frame
+        #Annotate and display frame
         frame = box_annotator.annotate(scene=frame, detections=detections, labels=labels)
         line_annotator.annotate(frame=frame, line_counter=line_counter)
         sink.write_frame(frame)

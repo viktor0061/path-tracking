@@ -7,7 +7,9 @@ The project should be run on one of the latest popular gnu/linux distributions, 
 <h3>Environment packages</h3>
 
 Running the project will require the python virtualenv package and a python3.8.x installation.
-To do that, simply install the virtualenv package available on pypi.org and download a tarball with an older python3.8 release from the official site.
+To do that, simply install the virtualenv package available on pypi.org and download a tarball with an older python3.8 release from the official site.<br>
+`pipX install virtualenv`<br>
+`wget https://www.python.org/downloads/release/python-3816/`
 
 It will also require libbz2-dev libraries, so the interpreter can be compiled with bz2 support and it will also require liblzma-dev.
 `apt-get install libbz2-dev liblzma-dev`
