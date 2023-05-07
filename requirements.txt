@@ -1,0 +1,6 @@
+torch>=1.7.0
+onnx==1.8.0
+ultralytics==8.0.89
+supervision==0.2.0
+onemetric==0.1.2
+bytetracker==0.3.2
