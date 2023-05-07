@@ -1,9 +1,9 @@
 env
 
-*.pt
-*.jpg
-*.png
-*.mkv
-*.mp4
+*.pt*
+*.jpg*
+*.png*
+*.mkv*
+*.mp4*
 
 import-backup.txt
